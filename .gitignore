@@ -30,3 +30,8 @@
 *.exe
 *.out
 *.app
+/aoc2019/.vs/aoc2019/v16
+/aoc2019/aoc2019_01/Debug
+/aoc2019/Debug
+/aoc2019/aoc2019_01/aoc2019_01.vcxproj.user
+/aoc2019/aoc2019_01/aoc2019_01.vcxproj.filters
