@@ -265,3 +265,71 @@ int main()
       assert(ore == 2210736);
    }
 }
+
+/*
+
+std::pair<int, chemicals_collection> find_reaction(reactions_collection const & reactions, std::string const & name)
+{
+   auto it = std::find_if(reactions.begin(), reactions.end(),
+                          [name](std::pair<chemical_t, chemicals_collection> const & p)
+                          {
+      return p.first.name == name;
+   });
+   
+   if(it == reactions.end()) throw std::runtime_error("invalid chemical");
+   return {it->first.quantity, it->second};
+}
+
+void sort(reactions_collection const & reactions, std::deque<std::string>& order, std::set<std::string>& visited, std::string const & name)
+{
+   if(name == "ORE") return;
+   
+   visited.insert(name);
+   auto const &[q, r] = find_reaction(reactions, name);
+   for(auto const & c : r)
+   {
+      if(!visited.count(c.name))
+      {
+         sort(reactions, order, visited, c.name);
+      }
+   }
+   order.push_front(name);
+}
+
+std::deque<std::string> get_order(reactions_collection const & reactions)
+{
+   std::deque<std::string> order;
+   std::set<std::string> visited;
+   
+   sort(reactions, order, visited, "FUEL");
+   
+   return order;
+}
+
+int get_quantity_needed(int const a, int const b)
+{
+   return a == b ? 1 : static_cast<int>(std::ceil(static_cast<double>(a) / b));
+};
+
+int compute_ore(reactions_collection const& collection)
+{
+   auto it = collection.find(chemical_t{1, "FUEL"});
+   if (it == collection.end()) throw std::runtime_error("Fuel reaction not found");
+   
+   std::map<std::string, int> amountNeeded{{"FUEL", 1}};
+   auto order = get_order(collection);
+   for(auto const & name : order)
+   {
+      auto const & [produced, reactions] = find_reaction(collection, name);
+      auto needed = amountNeeded[name];
+      auto factor = get_quantity_needed(needed, produced);
+      
+      for(auto const c : reactions)
+      {
+         amountNeeded[c.name] += c.quantity * factor;
+      }
+   }
+   
+   return amountNeeded["ORE"];
+}
+*/
