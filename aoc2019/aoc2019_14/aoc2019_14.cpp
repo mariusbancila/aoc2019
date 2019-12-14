@@ -9,6 +9,7 @@
 #include <regex>
 #include <algorithm>
 #include <numeric>
+#include <assert.h>
 
 struct chemical_t
 {
@@ -120,7 +121,7 @@ int compute_ore(reactions_collection const& collection)
          }) != collection.end();
    };
 
-   auto l_get_reactants = [collection](chemical_t const& c)
+   auto l_get_reaction = [collection](chemical_t const& c)
    {
       auto it = std::find_if(
          collection.begin(), collection.end(),
@@ -130,7 +131,33 @@ int compute_ore(reactions_collection const& collection)
          });
 
       if (it == collection.end()) throw std::runtime_error("chemical not found");
-      return it->second;
+      return *it;
+   };
+
+   auto l_minimum_factor = [](int const a, int const b)
+   {
+      return a == b ? 1 : static_cast<int>(std::ceil(static_cast<double>(a) / b));
+   };
+
+   auto l_reduce = [](chemicals_collection const& chemicals)
+   {
+      std::map<std::string, int> quantities;
+      for (auto const& c : chemicals)
+      {
+         auto it = quantities.find(c.name);
+         if (it == quantities.end())
+            quantities.insert(std::make_pair(c.name, c.quantity));
+         else
+            it->second += c.quantity;
+      }
+
+      chemicals_collection newchemicals;
+      for (auto const& [n, q] : quantities)
+      {
+         newchemicals.push_back(chemical_t{ q, n });
+      }
+
+      return newchemicals;
    };
 
    chemicals_collection chemicals(it->second);
@@ -145,13 +172,18 @@ int compute_ore(reactions_collection const& collection)
          }
          else
          {
-            auto reactants = l_get_reactants(c);
+            auto const & [prod, reactants] = l_get_reaction(c);
+            auto factor = l_minimum_factor(c.quantity, prod.quantity);
+
             for (auto const& r : reactants)
             {
-               newchemicals.push_back(chemical_t{std::lcm(r.quantity, c.quantity), r.name});
+               newchemicals.push_back(r * factor);
             }
          }
       }
+
+      auto result = l_reduce(newchemicals);
+      chemicals.swap(result);
    } while (
       !std::all_of(
          chemicals.begin(), chemicals.end(), 
@@ -160,12 +192,76 @@ int compute_ore(reactions_collection const& collection)
             return l_is_first_product(c); 
          }));
 
-   return 0;
+   std::map<std::string, int> quantities;
+   for (auto const& c : chemicals)
+   {
+      auto it = quantities.find(c.name);
+      if (it == quantities.end())
+         quantities.insert(std::make_pair(c.name, c.quantity));
+      else
+         it->second += c.quantity;
+   }
+
+   auto total = 0;
+   for (auto const& [name, quantity] : quantities)
+   {
+      auto c = l_get_reaction(chemical_t{ 1, name });
+      assert(c.second.front().name == "ORE");
+
+      auto factor = l_minimum_factor(quantity, c.first.quantity);
+      total += factor * c.second.front().quantity;
+   }
+
+   return total;
 }
 
 int main()
 {
+   //{
+   //   auto reactions = read_reaction(R"(..\data\aoc2019_14_test1.txt)");
+   //   auto ore = compute_ore(reactions);
+   //   assert(ore == 31);
+   //}
+
+   //{
+   //   auto reactions = read_reaction(R"(..\data\aoc2019_14_test2.txt)");
+   //   auto ore = compute_ore(reactions);
+   //   assert(ore == 165);
+   //}
+
+   //{
+   //   auto reactions = read_reaction(R"(..\data\aoc2019_14_test3.txt)");
+   //   auto ore = compute_ore(reactions);
+   //   assert(ore == 13312);
+   //}
+
+   //{
+   //   auto reactions = read_reaction(R"(..\data\aoc2019_14_test4.txt)");
+   //   auto ore = compute_ore(reactions);
+   //   assert(ore == 180697);
+   //}
+
+   //{
+   //   auto reactions = read_reaction(R"(..\data\aoc2019_14_test6.txt)");
+   //   auto ore = compute_ore(reactions);
+   //   assert(ore == 180697);
+   //}
+
+   //{
+   //   auto reactions = read_reaction(R"(..\data\aoc2019_14_test5.txt)");
+   //   auto ore = compute_ore(reactions);
+   //   assert(ore == 2210736);
+   //}
+
    {
-      auto reactions = read_reaction(R"(..\data\aoc2019_14_test1.txt)");
+      auto reactions = read_reaction(R"(..\data\aoc2019_14_input1.txt)");
+      auto ore = compute_ore(reactions);
+      std::cout << ore << '\n';
+   }
+
+   {
+      auto reactions = read_reaction(R"(..\data\aoc2019_14_test7.txt)");
+      auto ore = compute_ore(reactions);
+      assert(ore == 2210736);
    }
 }
