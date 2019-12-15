@@ -347,7 +347,7 @@ private:
 
 int main()
 {
-   std::ifstream input("..\\data\\aoc2019_13_input1.txt");
+   std::ifstream input("..\\data\\aoc2019_15_input1.txt");
    if (!input.is_open()) return -1;
 
    std::string text;
