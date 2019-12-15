@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <vector>
+#include <array>
 #include <map>
 #include <set>
 #include <string>
@@ -94,7 +95,7 @@ public:
 
    program_t(std::initializer_list<memory_unit> mem) : memory(mem) {}
 
-   void execute(std::function<int(void)> fin, std::function<void(memory_unit)> fout)
+   void execute(std::function<int(void)> fin, std::function<bool(memory_unit)> fout)
    {
       while (true)
       {
@@ -114,7 +115,7 @@ public:
          case OP_ADD:      execute_add(mod1, mod2, mod3); break;
          case OP_MUL:      execute_mul(mod1, mod2, mod3); break;
          case OP_IN:       execute_in(mod1, fin()); break;
-         case OP_OUT:      fout(execute_out(mod1)); break;
+         case OP_OUT:      if(fout(execute_out(mod1))) return; break;
          case OP_JMPNZ:    execute_jump_nz(mod1, mod2); break;
          case OP_JMPZ:     execute_jump_z(mod1, mod2); break;
          case OP_LS:       execute_less(mod1, mod2, mod3); break;
@@ -238,7 +239,7 @@ enum class status_t
    uncharted = -1,
    wall = 0,
    empty = 1,
-   oxygen_system = 2
+   oxygen_system = 2,
 };
 
 std::pair<size_t, size_t> move_robot(size_t x, size_t y, movement_t const movement)
@@ -258,16 +259,17 @@ class robot_t
 {
    size_t cx;
    size_t cy;
-   std::vector<status_t> surface;
+   std::vector<int> surface;
    size_t x;
    size_t y;
    bool finished = false;
+   movement_t last_movement;
 
 public:
    robot_t(size_t const w = 50, size_t const h = 50): 
       cx(w), cy(h), x(w), y(h)
    {      
-      surface.resize(get_width() * get_height(), status_t::uncharted);
+      surface.resize(get_width() * get_height(), static_cast<int>(status_t::uncharted));
    }
 
    size_t get_width() const { return 2 * cx + 1; }
@@ -275,47 +277,106 @@ public:
 
    void on_status_report(status_t status)
    {
-      surface[y * get_width() + x] = status;
-      if (status == status_t::oxygen_system) finished = true;
+      auto [nx, ny] = move_robot(x, y, last_movement);
 
-      print();
-   }
-
-   status_t cell_at(size_t const c, size_t const r) const
-   {
-      return surface[r * get_width() + c];
-   }
-
-   movement_t get_next_movement()
-   {
-      auto movement = movement_t::north;
-
-      if (cell_at(x, y - 1) == status_t::uncharted) movement = movement_t::north;
-      else if (cell_at(x-1, y) == status_t::uncharted) movement = movement_t::west;
-      else if (cell_at(x, y+1) == status_t::uncharted) movement = movement_t::south;
-      else if (cell_at(x +1, y) == status_t::uncharted) movement = movement_t::east;
-      else if (cell_at(x, y - 1) == status_t::empty) movement = movement_t::north;
-      else if (cell_at(x - 1, y) == status_t::empty) movement = movement_t::west;
-      else if (cell_at(x, y + 1) == status_t::empty) movement = movement_t::south;
-      else if (cell_at(x + 1, y) == status_t::empty) movement = movement_t::east;
-
-      auto [nx, ny] = move_robot(x, y, movement);
       if (nx < 0 || nx > get_width() || y < 0 || ny > get_height())
       {
          resize();
       }
 
-      x = nx;
-      y = ny;
+      set_status_at(nx, ny, status);
 
-      return movement;
+      if (status == status_t::oxygen_system) finished = true;
+      else if (status != status_t::wall)
+      {
+         x = nx;
+         y = ny;
+      }
+
+      static int i = 0;
+      i++;
+      if(i % 50 == 0)
+         print();
+   }
+
+   status_t cell_at(size_t const c, size_t const r) const
+   {
+      auto value = surface[r * get_width() + c];
+      if (value == -1) return status_t::uncharted;
+
+      return static_cast<status_t>(value & 0xffff);
+   }
+
+   int hits_at(size_t const c, size_t const r) const
+   {
+      return surface[r * get_width() + c] >> 16;
+   }
+
+   void set_status_at(size_t const c, size_t const r, status_t const status)
+   {
+      if (cell_at(c, r) == status_t::empty)
+      {
+         assert(status == status_t::empty);
+         auto hits = hits_at(c, r);
+         surface[r * get_width() + c] = ((hits + 1) << 16) | static_cast<int>(status);
+      }
+      else if (status == status_t::empty)
+      {
+         surface[r * get_width() + c] = (1 << 16) | static_cast<int>(status);
+      }
+      else
+      {
+         surface[r * get_width() + c] = static_cast<int>(status);
+      }
+
+   }
+
+   movement_t get_next_movement()
+   {
+      last_movement = movement_t::north;
+
+      if (x == 0 || x == get_width() - 1 || y == 0 || y == get_height() - 1)
+         resize();
+
+      if (cell_at(x, y - 1) == status_t::uncharted) last_movement = movement_t::north;
+      else if (cell_at(x-1, y) == status_t::uncharted) last_movement = movement_t::west;
+      else if (cell_at(x, y+1) == status_t::uncharted) last_movement = movement_t::south;
+      else if (cell_at(x +1, y) == status_t::uncharted) last_movement = movement_t::east;
+      else
+      {
+         std::array<std::pair<movement_t, int>, 4> arr
+         {
+            std::make_pair(movement_t::north, 0),
+            std::make_pair(movement_t::south, 0),
+            std::make_pair(movement_t::west, 0),
+            std::make_pair(movement_t::east, 0),
+         };
+         if (cell_at(x, y - 1) == status_t::empty) arr[0].second = hits_at(x, y -1);
+         else if (cell_at(x, y - 1) == status_t::wall) arr[0].second = std::numeric_limits<int>::max();
+
+         if (cell_at(x - 1, y) == status_t::empty) arr[2].second = hits_at(x - 1, y);
+         else if (cell_at(x - 1, y) == status_t::wall) arr[2].second = std::numeric_limits<int>::max();
+
+         if (cell_at(x, y + 1) == status_t::empty) arr[1].second = hits_at(x, y + 1);
+         else if (cell_at(x, y + 1) == status_t::wall) arr[1].second = std::numeric_limits<int>::max();
+         
+         if (cell_at(x + 1, y) == status_t::empty) arr[3].second = hits_at(x + 1, y);
+         else if (cell_at(x + 1, y) == status_t::wall) arr[3].second = std::numeric_limits<int>::max();
+
+         std::sort(arr.begin(), arr.end(), [](std::pair<movement_t, int> const & p1, std::pair<movement_t, int> const & p2) {
+            return p1.second < p2.second;
+         });
+
+         last_movement = arr.front().first;
+      }
+
+      return last_movement;
    }
 
    bool is_finished() const { return finished; }
 
    void print()
    {
-      //system("cls");
       std::cout << "\033[2J\033[1;1H";
       for (size_t r = 0; r < get_height(); ++r)
       {
@@ -323,14 +384,16 @@ public:
          {
             if (c == x && r == y)
                std::cout << '@';
+            else if (c == cx && r == cy)
+               std::cout << 'X';
             else
             {
                switch (cell_at(c, r))
                {
-               case status_t::uncharted: std::cout << ' ';
-               case status_t::wall: std::cout << '#';
-               case status_t::empty: std::cout << '.';
-               case status_t::oxygen_system: std::cout << 'o';
+               case status_t::uncharted: std::cout << ' '; break;
+               case status_t::wall: std::cout << char(178); break;
+               case status_t::empty: std::cout << char(176); break;
+               case status_t::oxygen_system: std::cout << 'o'; break;
                }
             }
          }
@@ -341,7 +404,28 @@ public:
 private:
    void resize()
    {
-      throw std::runtime_error("resize not implemented");
+      int const increase = 2;
+      auto w = get_width();
+      auto h = get_height();
+      auto ncx = cx + increase;
+      auto ncy = cy + increase;
+      auto nw = ncx * 2 + 1;
+      auto nh = ncy * 2 + 1;
+      std::vector<int> newsurface(nw * nh, static_cast<int>(status_t::uncharted));
+
+      for (size_t r = 0; r < h; ++r)
+      {
+         for (size_t c = 0; c < w; ++c)
+         {
+            newsurface[(r+ increase) * nw + (c+ increase)] = surface[r * w + c];
+         }
+      }
+
+      surface.swap(newsurface);
+      cx = ncx;
+      cy = ncy;
+      x += increase;
+      y += increase;
    }
 };
 
@@ -363,15 +447,11 @@ int main()
    auto memory = read_program(text);
    program_t program{ memory };
 
-   robot_t robot(40, 15);
+   robot_t robot(20, 20);
 
    auto l_input = [&robot]() {return static_cast<int>(robot.get_next_movement()); };
-   auto l_output = [&robot](memory_unit status) {robot.on_status_report(static_cast<status_t>(status)); };
+   auto l_output = [&robot](memory_unit status) {robot.on_status_report(static_cast<status_t>(status)); return false; /* status == static_cast<memory_unit>(status_t::oxygen_system);*/ };
 
-   while (!robot.is_finished())
-   {
-      program.execute(l_input, l_output);
-
-      robot.print();
-   }
+   program.execute(l_input, l_output);
+   robot.print();
 }
