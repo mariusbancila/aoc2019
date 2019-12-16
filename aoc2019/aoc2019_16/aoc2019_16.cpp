@@ -5,14 +5,13 @@
 #include <vector>
 #include <string>
 #include <sstream>
-#include <string_view>
 #include <cmath>
 #include <numeric>
 #include <assert.h>
 
 using number_t = std::vector<int>;
 
-number_t from_string(std::string_view text)
+number_t from_string(std::string const & text)
 {
    number_t number;
 
