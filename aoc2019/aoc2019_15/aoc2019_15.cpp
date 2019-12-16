@@ -4,10 +4,8 @@
 #include <iostream>
 #include <vector>
 #include <array>
-#include <map>
 #include <set>
 #include <string>
-#include <string_view>
 #include <fstream>
 #include <algorithm>
 #include <assert.h>
@@ -226,208 +224,144 @@ memory_t read_program(std::string_view text)
    return memory;
 }
 
-enum class movement_t
+struct point_t
 {
-   north = 1,
-   south = 2,
-   west = 3,
-   east = 4
+   long long x;
+   long long y;
 };
 
-enum class status_t
+bool operator==(point_t const & p1, point_t const & p2)
 {
-   uncharted = -1,
-   wall = 0,
-   empty = 1,
-   oxygen_system = 2,
-};
-
-std::pair<size_t, size_t> move_robot(size_t x, size_t y, movement_t const movement)
-{
-   switch (movement)
-   {
-   case movement_t::north: y--; break;
-   case movement_t::south: y++; break;
-   case movement_t::west: x--; break;
-   case movement_t::east: x++; break;
-   }
-
-   return { x, y };
+   return p1.x == p2.x && p1.y == p2.y;
 }
 
-class robot_t
+bool operator<(point_t const& p1, point_t const& p2)
 {
-   size_t cx;
-   size_t cy;
-   std::vector<int> surface;
-   size_t x;
-   size_t y;
-   bool finished = false;
-   movement_t last_movement;
+   return p1.x == p2.x ? p1.y < p2.y : p1.x < p2.x;
+}
 
-public:
-   robot_t(size_t const w = 50, size_t const h = 50): 
-      cx(w), cy(h), x(w), y(h)
-   {      
-      surface.resize(get_width() * get_height(), static_cast<int>(status_t::uncharted));
-   }
-
-   size_t get_width() const { return 2 * cx + 1; }
-   size_t get_height() const { return 2 * cy + 1; }
-
-   void on_status_report(status_t status)
-   {
-      auto [nx, ny] = move_robot(x, y, last_movement);
-
-      if (nx < 0 || nx > get_width() || y < 0 || ny > get_height())
-      {
-         resize();
-      }
-
-      set_status_at(nx, ny, status);
-
-      if (status == status_t::oxygen_system) finished = true;
-      else if (status != status_t::wall)
-      {
-         x = nx;
-         y = ny;
-      }
-
-      static int i = 0;
-      i++;
-      if(i % 50 == 0)
-         print();
-   }
-
-   status_t cell_at(size_t const c, size_t const r) const
-   {
-      auto value = surface[r * get_width() + c];
-      if (value == -1) return status_t::uncharted;
-
-      return static_cast<status_t>(value & 0xffff);
-   }
-
-   int hits_at(size_t const c, size_t const r) const
-   {
-      return surface[r * get_width() + c] >> 16;
-   }
-
-   void set_status_at(size_t const c, size_t const r, status_t const status)
-   {
-      if (cell_at(c, r) == status_t::empty)
-      {
-         assert(status == status_t::empty);
-         auto hits = hits_at(c, r);
-         surface[r * get_width() + c] = ((hits + 1) << 16) | static_cast<int>(status);
-      }
-      else if (status == status_t::empty)
-      {
-         surface[r * get_width() + c] = (1 << 16) | static_cast<int>(status);
-      }
-      else
-      {
-         surface[r * get_width() + c] = static_cast<int>(status);
-      }
-
-   }
-
-   movement_t get_next_movement()
-   {
-      last_movement = movement_t::north;
-
-      if (x == 0 || x == get_width() - 1 || y == 0 || y == get_height() - 1)
-         resize();
-
-      if (cell_at(x, y - 1) == status_t::uncharted) last_movement = movement_t::north;
-      else if (cell_at(x-1, y) == status_t::uncharted) last_movement = movement_t::west;
-      else if (cell_at(x, y+1) == status_t::uncharted) last_movement = movement_t::south;
-      else if (cell_at(x +1, y) == status_t::uncharted) last_movement = movement_t::east;
-      else
-      {
-         std::array<std::pair<movement_t, int>, 4> arr
-         {
-            std::make_pair(movement_t::north, 0),
-            std::make_pair(movement_t::south, 0),
-            std::make_pair(movement_t::west, 0),
-            std::make_pair(movement_t::east, 0),
-         };
-         if (cell_at(x, y - 1) == status_t::empty) arr[0].second = hits_at(x, y -1);
-         else if (cell_at(x, y - 1) == status_t::wall) arr[0].second = std::numeric_limits<int>::max();
-
-         if (cell_at(x - 1, y) == status_t::empty) arr[2].second = hits_at(x - 1, y);
-         else if (cell_at(x - 1, y) == status_t::wall) arr[2].second = std::numeric_limits<int>::max();
-
-         if (cell_at(x, y + 1) == status_t::empty) arr[1].second = hits_at(x, y + 1);
-         else if (cell_at(x, y + 1) == status_t::wall) arr[1].second = std::numeric_limits<int>::max();
-         
-         if (cell_at(x + 1, y) == status_t::empty) arr[3].second = hits_at(x + 1, y);
-         else if (cell_at(x + 1, y) == status_t::wall) arr[3].second = std::numeric_limits<int>::max();
-
-         std::sort(arr.begin(), arr.end(), [](std::pair<movement_t, int> const & p1, std::pair<movement_t, int> const & p2) {
-            return p1.second < p2.second;
-         });
-
-         last_movement = arr.front().first;
-      }
-
-      return last_movement;
-   }
-
-   bool is_finished() const { return finished; }
-
-   void print()
-   {
-      std::cout << "\033[2J\033[1;1H";
-      for (size_t r = 0; r < get_height(); ++r)
-      {
-         for (size_t c = 0; c < get_width(); ++c)
-         {
-            if (c == x && r == y)
-               std::cout << '@';
-            else if (c == cx && r == cy)
-               std::cout << 'X';
-            else
-            {
-               switch (cell_at(c, r))
-               {
-               case status_t::uncharted: std::cout << ' '; break;
-               case status_t::wall: std::cout << char(178); break;
-               case status_t::empty: std::cout << char(176); break;
-               case status_t::oxygen_system: std::cout << 'o'; break;
-               }
-            }
-         }
-         std::cout << '\n';
-      }
-   }
-
-private:
-   void resize()
-   {
-      int const increase = 2;
-      auto w = get_width();
-      auto h = get_height();
-      auto ncx = cx + increase;
-      auto ncy = cy + increase;
-      auto nw = ncx * 2 + 1;
-      auto nh = ncy * 2 + 1;
-      std::vector<int> newsurface(nw * nh, static_cast<int>(status_t::uncharted));
-
-      for (size_t r = 0; r < h; ++r)
-      {
-         for (size_t c = 0; c < w; ++c)
-         {
-            newsurface[(r+ increase) * nw + (c+ increase)] = surface[r * w + c];
-         }
-      }
-
-      surface.swap(newsurface);
-      cx = ncx;
-      cy = ncy;
-      x += increase;
-      y += increase;
-   }
+static const std::array<int, 4> directions = 
+{
+    1, // north
+    2, // south
+    3, // west
+    4  // east
 };
+
+constexpr int S_WALL = 0;
+constexpr int S_EMPTY = 1;
+constexpr int S_OXYGEN = 2;
+
+static const std::array<int, 4> opposites = { 2, 1, 4, 3 };
+
+static uint8_t get_opposite(int dir)
+{
+   return opposites[dir - 1];
+};
+
+point_t update_position(point_t p, int const direction)
+{
+   switch (direction)
+   {
+   case 1: --p.y; break; // north
+   case 2: ++p.y; break; // south
+   case 3: --p.x; break; // west
+   case 4: ++p.x; break; // east
+   }
+
+   return p;
+}
+
+std::tuple<point_t, size_t, size_t, std::set<point_t>> find_path(program_t program)
+{
+   point_t pos{ 0, 0 };
+
+   auto move_droid = [&](int direction)
+   {
+      int status = 0;
+      auto l_input = [direction]() { return direction; };
+      auto l_output = [&status](memory_unit value) {status = static_cast<int>(value); return true; };
+
+      program.execute(l_input, l_output);
+      return status;
+   };
+
+   std::set<point_t> walls;
+   std::set<point_t> visited;
+   point_t oxygen_pos;
+   size_t oxygen_path_length = 0;
+   size_t open_locations = 0;
+
+   std::function<void(int64_t)> explore = [&](int direction)
+   {
+      auto p = update_position(pos, direction);
+      if (visited.count(p) == 1 || walls.count(p) == 1)
+      {
+         return;
+      }
+
+      auto status = move_droid(direction);
+      assert(status < 3);
+      if (status == S_WALL)
+      {
+         walls.insert(p);
+         return;
+      }
+
+      ++open_locations;
+      pos = update_position(pos, direction);
+      visited.insert(pos);
+      if (status == S_OXYGEN)
+      {
+         oxygen_pos = pos;
+         oxygen_path_length = visited.size();
+      }
+
+      for (auto d : directions)
+      {
+         explore(d);
+      }
+
+      visited.erase(pos);
+      pos = update_position(pos, get_opposite(direction));
+      move_droid(get_opposite(direction));
+   };
+
+   for (auto d : directions)
+   {
+      explore(d);
+   }
+
+   return { oxygen_pos, oxygen_path_length, open_locations, walls };
+}
+
+void compute_oxygenation_time(std::set<point_t> const & walls, size_t const open_locations, point_t const & oxygen_pos)
+{
+   std::set<point_t> filled;
+   size_t max_depth = 0;
+   std::function<void(point_t, size_t)> oxygenate = [&](point_t p, size_t depth) 
+   {
+      if (filled.count(p) > 0 || walls.count(p) > 0) {
+         return;
+      }
+
+      max_depth = std::max(depth, max_depth);
+      filled.insert(p);
+
+      if (filled.size() == open_locations) 
+      {
+         std::cout << "minutes: " << max_depth << '\n';
+         return;
+      }
+
+      for (auto d : directions) 
+      {
+         oxygenate(update_position(p, d), depth + 1);
+      }
+   };
+
+   oxygenate(oxygen_pos, 0);
+}
 
 int main()
 {
@@ -447,11 +381,11 @@ int main()
    auto memory = read_program(text);
    program_t program{ memory };
 
-   robot_t robot(20, 20);
+   // part 1
+   auto const & [oxygen_pos, oxygen_path_length, open_locations, walls] = find_path(program);
+   std::cout << "Oxygen position: " << oxygen_pos.x << ',' << oxygen_pos.y << '\n';
+   std::cout << "Oxygen path length: " << oxygen_path_length << '\n';
 
-   auto l_input = [&robot]() {return static_cast<int>(robot.get_next_movement()); };
-   auto l_output = [&robot](memory_unit status) {robot.on_status_report(static_cast<status_t>(status)); return false; /* status == static_cast<memory_unit>(status_t::oxygen_system);*/ };
-
-   program.execute(l_input, l_output);
-   robot.print();
+   // part 2
+   compute_oxygenation_time(walls, open_locations, oxygen_pos);
 }
