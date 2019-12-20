@@ -45,6 +45,9 @@ inline bool is_upper_letter(char const c)
    return 'A' <= c && c <= 'Z'; 
 }
 
+constexpr int xdir[] = { 0, 0, 1, -1 };
+constexpr int ydir[] = { 1, -1, 0, 0 };
+
 field_t read_field(std::string const& filename)
 {
    std::ifstream stream(filename);
@@ -146,30 +149,26 @@ int find_shortest_path(data_t data)
       access_t new_access;
       for (auto p : access) 
       {
-         point_t next[4] = 
+         for(int i = 0; i < 4; ++i)
          {
-           {p.x - 1, p.y},
-           {p.x + 1, p.y},
-           {p.x, p.y - 1},
-           {p.x, p.y + 1},
-         };
-         for (auto p : next)
-         {
-            if (p == end)
+            point_t np{ p.x + xdir[i], p.y + ydir[i] };
+
+            if (np == end)
             {
                return distance + 1;
             }
-            if (auto iter = portals.find(p); iter != portals.end())
+            if (auto iter = portals.find(np); iter != portals.end())
             {
-               p = iter->second;
+               np = iter->second;
             }
-            if (field[p.x][p.y] == C_PATH)
+            if (field[np.x][np.y] == C_PATH)
             {
-               field[p.x][p.y] = C_ROBOT;
-               new_access.insert(p);
+               field[np.x][np.y] = C_ROBOT;
+               new_access.insert(np);
             }
          }
       }
+
       std::swap(access, new_access);
    }
 
@@ -189,26 +188,20 @@ int find_shortest_path_outermost_layers(data_t const & data, int const limit = 1
       level_access_t new_access;
       for (auto const [l, p] : access)
       {
-         point_t next[4] = 
+         for (int i = 0; i < 4; ++i)
          {
-           {p.x - 1, p.y},
-           {p.x + 1, p.y},
-           {p.x, p.y - 1},
-           {p.x, p.y + 1},
-         };
+            point_t np{ p.x + xdir[i], p.y + ydir[i] };
 
-         for (auto p : next) 
-         {
             level = l;
-            if (level == 0 && p == end) 
+            if (level == 0 && np == end) 
             {
                return distance + 1;
             }
 
-            if (auto iter = portals.find(p); iter != portals.end()) 
+            if (auto iter = portals.find(np); iter != portals.end()) 
             {
-               if (p.y < 2 || p.y >= static_cast<int>(std::size(field[p.x])) - 2 ||
-                   p.x < 2 || p.x >= static_cast<int>(std::size(field)) - 2)
+               if (np.y < 2 || np.y >= static_cast<int>(std::size(field[np.x])) - 2 ||
+                   np.x < 2 || np.x >= static_cast<int>(std::size(field)) - 2)
                {
                   if (level == 0) 
                   {
@@ -229,12 +222,12 @@ int find_shortest_path_outermost_layers(data_t const & data, int const limit = 1
                      levels.push_back(field);
                   }
                }
-               p = iter->second;
+               np = iter->second;
             }
-            if (levels[level][p.x][p.y] == C_PATH) 
+            if (levels[level][np.x][np.y] == C_PATH) 
             {
-               levels[level][p.x][p.y] = C_ROBOT;
-               new_access.insert({ level, p });
+               levels[level][np.x][np.y] = C_ROBOT;
+               new_access.insert({ level, np });
             }
          }
       }
