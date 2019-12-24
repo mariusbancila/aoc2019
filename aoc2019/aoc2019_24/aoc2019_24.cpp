@@ -10,6 +10,9 @@
 constexpr char C_BUG = '#';
 constexpr char C_EMPTY = '.';
 
+constexpr int xdir[] = { 0, -1, 0, 1 };
+constexpr int ydir[] = { -1, 0, 1, 0 };
+
 struct grid_t
 {
    std::string data;
@@ -31,14 +34,19 @@ public:
 
    char at(size_t const x, size_t const y) const
    {
-      assert(x >=0 && x < width && y >=0 && y < height);
+      assert(is_valid_position(x, y));
       return data[y * width + x];
    }
 
    char& at(size_t const x, size_t const y)
    {
-      assert(x >= 0 && x < width && y >= 0 && y < height);
+      assert(is_valid_position(x, y));
       return data[y * width + x];
+   }
+
+   bool is_valid_position(size_t const x, size_t const y) const
+   {
+      return x >= 0 && x < width && y >= 0 && y < height;
    }
 
    long long get_biodiversity() const
@@ -46,22 +54,9 @@ public:
       long long bio = 0;
       for (int i = 0; i < data.size(); ++i)
       {
-         if (data[i] == C_BUG) bio += (1 << i);
+         if (data[i] == C_BUG) bio |= (1 << i);
       }
       return bio;
-   }
-
-   int count_bugs(char const c1, const char c2)
-   {
-      return (c1 == C_BUG ? 1 : 0) + (c2 == C_BUG ? 1 : 0);
-   }
-   int count_bugs(char const c1, const char c2, const char c3)
-   {
-      return (c1 == C_BUG ? 1 : 0) + (c2 == C_BUG ? 1 : 0) + (c3 == C_BUG ? 1 : 0);
-   }
-   int count_bugs(char const c1, const char c2, const char c3, char const c4)
-   {
-      return (c1 == C_BUG ? 1 : 0) + (c2 == C_BUG ? 1 : 0) + (c3 == C_BUG ? 1 : 0) + (c4 == C_BUG ? 1 : 0);
    }
 
    char evolve(char const current, int const neighbors)
@@ -77,52 +72,21 @@ public:
       grid_t newgrid;
       newgrid.load(newdata, width, height);
 
-      // corners
-      auto tl = count_bugs(at(1, 0), at(0, 1));
-      newgrid.at(0, 0) = evolve(at(0, 0), tl);
-
-      auto tr = count_bugs(at(width-2, 0), at(width-1, 1));
-      newgrid.at(width-1, 0) = evolve(at(width-1, 0), tr);
-
-      auto bl = count_bugs(at(0, height-2), at(1, height-1));
-      newgrid.at(0, height-1) = evolve(at(0, height-1), bl);
-
-      auto br = count_bugs(at(width-2, height - 1), at(width-1, height - 2));
-      newgrid.at(width-1, height - 1) = evolve(at(width-1, height-1), br);
-
-      // lines
-      // top
-      for (int c = 1; c < width - 1; c++)
-      {
-         auto v = count_bugs(at(c-1, 0), at(c+1, 0), at(c, 1));
-         newgrid.at(c, 0) = evolve(at(c, 0), v);
-      }
-      // bottom
-      for (int c = 1; c < width - 1; c++)
-      {
-         auto v = count_bugs(at(c - 1, height-1), at(c + 1, height - 1), at(c, height - 2));
-         newgrid.at(c, height - 1) = evolve(at(c, height - 1), v);
-      }
-      // left
-      for (int r = 1; r < height - 1; ++r)
-      {
-         auto v = count_bugs(at(0, r - 1), at(0, r + 1), at(1, r));
-         newgrid.at(0, r) = evolve(at(0, r), v);
-      }
-      // right
-      for (int r = 1; r < height - 1; ++r)
-      {
-         auto v = count_bugs(at(width-1, r - 1), at(width-1, r + 1), at(width-2, r));
-         newgrid.at(width-1, r) = evolve(at(width-1, r), v);
-      }
-
       // middle
-      for (int r = 1; r < height - 1; ++r)
+      for (int r = 0; r < height; ++r)
       {
-         for (int c = 1; c < width - 1; c++)
+         for (int c = 0; c < width; c++)
          {
-            auto v = count_bugs(at(c, r-1), at(c-1, r), at(c, r+1), at(c+1, r));
-            newgrid.at(c, r) = evolve(at(c, r), v);
+            int neighbors = 0;
+            for (int k = 0; k < 4; ++k)
+            {
+               int x = c + xdir[k];
+               int y = r + ydir[k];
+               if (is_valid_position(x, y) && at(x, y) == C_BUG)
+                  neighbors++;
+            }
+
+            newgrid.at(c, r) = evolve(at(c, r), neighbors);
          }
       }
 
